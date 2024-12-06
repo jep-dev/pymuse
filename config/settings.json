@@ -1,0 +1,19 @@
+{
+    "window": {
+        "width": -1,
+        "height": -1,
+        "fullscreen": false
+    },
+    "paths": {
+        "layouts": "layouts",
+        "audio": "audio",
+        "assets": "assets"
+    },
+    "theme": "night_mode",
+    "logging": {
+        "enabled": true,
+        "level": "DEBUG",
+        "file": "logs/application.log"
+    }
+}
+

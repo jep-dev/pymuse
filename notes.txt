@@ -1,0 +1,6 @@
+1. Gain/volume, scalar multiplier
+2. Equalization, balance frequencies (lo/hi/band pass)
+3. Panning, split mono to stereo and modulate channel volumes
+4. Dynamic range compression, non-linear gain reduction
+5. Clipping/distortion, nonlinear (hard/soft clipping) functions
+6. Amplitude modulation, tremolo, vary volume w/low freq. oscillator

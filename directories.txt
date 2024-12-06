@@ -1,0 +1,45 @@
+project/
+├── assets/                        # Folder for static assets (images, fonts, icons, etc.)
+│   ├── fonts/                     # Default fonts
+│   ├── icons/                     # Icons for UI
+│   └── images/                    # Backgrounds or textures
+├── audio/                         # Default folder for storing audio input/output files
+├── config/                        # Configuration files for initialization and settings
+│   ├── default_layout.json        # Initial default JSON layout
+│   ├── menu_bar.json              # Default menu bar structure
+│   ├── settings.json              # Program-wide settings (e.g., paths, theme)
+├── docs/                          # Documentation
+│   └── README.md                  # Basic usage and setup guide
+├── src/                           # Main Python source code
+│   ├── components/                # Modular components of the UI
+│   │   ├── __init__.py            # Makes this directory a module
+│   │   ├── button.py              # Button component
+│   │   ├── slider.py              # Slider component
+│   │   ├── knob.py                # Knob component
+│   │   ├── text_field.py          # Text field component
+│   │   ├── panel.py               # Panel/palette container component
+│   │   ├── histogram.py           # Visualization component for histograms
+│   │   └── fft_visualizer.py      # Visualization using FFT for sound
+│   ├── core/                      # Core functionality and utilities
+│   │   ├── __init__.py            # Makes this directory a module
+│   │   ├── app.py                 # Application lifecycle manager
+│   │   ├── json_manager.py        # Handles JSON parsing/loading/saving
+│   │   ├── event_handler.py       # Centralized input/output event handling
+│   │   ├── sound_manager.py       # Audio generation and processing
+│   │   └── ui_manager.py          # Constructs and manages UI layouts
+│   ├── themes/                    # Night mode and other themes
+│   │   ├── __init__.py            # Makes this directory a module
+│   │   ├── night_mode.py          # Night mode theme definitions
+│   │   └── other_themes.py        # Placeholder for additional themes
+│   ├── tests/                     # Unit tests for individual components
+│   │   ├── test_button.py         # Tests for Button component
+│   │   ├── test_slider.py         # Tests for Slider component
+│   │   ├── test_layouts.py        # Tests for JSON layout handling
+│   │   └── test_sound_manager.py  # Tests for audio management
+├── layouts/                       # User-saved layouts
+├── logs/                          # Logs for debugging and error tracking
+├── .gitignore                     # Ignored files for version control
+├── main.py                        # Main entry point of the application
+├── LICENSE                        # License information
+└── README.md                      # Overview and quick start guide
+
