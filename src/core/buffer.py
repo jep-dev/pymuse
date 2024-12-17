@@ -1,33 +1,59 @@
+from collections import deque
 import threading
 import time
 import sounddevice as sd
 import numpy as np
 from queue import Queue
+from threading import Event
+
+import threading
 
 class MultiBuffer:
-	def __init__(self, buffer_count=2, maxsize=10):
-		self.buffers = {i: Queue(maxsize=maxsize) for i in range(buffer_count)}
-		self.locks = {i: threading.Lock() for i in range(buffer_count)}
-		self.consumer_progress = {i: set() for i in range(buffer_count)}
+	def __init__(self, num_buffers, buffer_size, num_consumers):
+		self.buffer_size = buffer_size
+		self.num_consumers = num_consumers
+		self.buffers = deque(maxlen=num_buffers)  # Ring of buffers
+		self.consumer_progress = [0] * num_buffers  # Tracks how many consumers have processed each buffer
+		self.consumer_positions = [0] * num_consumers  # Each consumer's read position
+		self.lock = threading.Lock()  # Protect shared state
+		self.not_empty = threading.Condition(self.lock)  # Notify consumers when data is available
+		self.write_index = 0  # Tracks where to write next
 
-	def write(self, buffer_id, item):
-		with self.locks[buffer_id]:
-			if not self.buffers[buffer_id].full():
-				self.buffers[buffer_id].put(item)
+		# Initialize with empty buffers
+		for _ in range(num_buffers):
+			self.buffers.append([None] * buffer_size)
 
-	def read(self, buffer_id):
-		with self.locks[buffer_id]:
-			if not self.buffers[buffer_id].empty():
-				return self.buffers[buffer_id].get()
-		return None
+	def write(self, chunk):
+		with self.lock:
+			# Check if the next write position is available for overwriting
+			if self.consumer_progress[self.write_index] < self.num_consumers:
+				raise RuntimeError("Cannot overwrite; some consumers haven't finished with this buffer.")
 
-	def mark_consumed(self, buffer_id, consumer_id):
-		with self.locks[buffer_id]:
-			self.consumer_progress[buffer_id].add(consumer_id)
+			# Write data to the next buffer
+			self.buffers[self.write_index] = chunk
+			self.consumer_progress[self.write_index] = 0  # Reset progress for this buffer
 
-	def is_consumed_by_all(self, buffer_id, consumer_ids):
-		with self.locks[buffer_id]:
-			return self.consumer_progress[buffer_id].issuperset(consumer_ids)
+			# Advance write index
+			self.write_index = (self.write_index + 1) % len(self.buffers)
+			self.not_empty.notify_all()  # Notify consumers that data is available
+
+	def read(self, consumer_id):
+		with self.lock:
+			consumer_pos = self.consumer_positions[consumer_id]
+			while self.consumer_progress[consumer_pos] == 0:  # Wait for data to be written
+				self.not_empty.wait()
+
+			# Get the chunk for this consumer
+			chunk = self.buffers[consumer_pos]
+
+			# Mark this consumer as having processed this buffer
+			self.consumer_progress[consumer_pos] += 1
+
+			# Advance the consumer's position
+			self.consumer_positions[consumer_id] = (consumer_pos + 1) % len(self.buffers)
+
+			return chunk
+
 
 class Consumer(threading.Thread):
 	def __init__(self, consumerId, buffer_id, multi_buffer):
@@ -94,33 +120,80 @@ class AudioPlayer(Consumer):
 		"""Get the total duration of audio played, including wraps."""
 		return self.total_played
 
-# Example usage
-if __name__ == "__main__":
-	multi_buffer = MultiBuffer(buffer_count=1)
+class ThreadedProducer:
+	def __init__(self, buffer, buffer_id, generator):
+		self.buffer = buffer
+		self.buffer_id = buffer_id
+		self.generator = generator
+		self.thread = threading.Thread(target=self.run)
+		self.running = False
 
-	# Simulate an audio producer writing chunks to the buffer
-	def dummy_producer(buffer, buffer_id):
-		for _ in range(100):
-			chunk = np.random.rand(44100 * 2) * 0.5  # Simulate 1 second of stereo audio
-			buffer.write(buffer_id, {"data": chunk, "timestamp": time.time()})
-			time.sleep(0.1)
+	def start(self):
+		self.running = True
+		self.thread.start()
 
-	producer_thread = threading.Thread(target=dummy_producer, args=(multi_buffer, 0))
-	producer_thread.start()
+	def stop(self):
+		self.running = False
+		self.thread.join()
 
-	# Start an audio player consumer
-	audio_player = AudioPlayer(consumerId=1, buffer_id=0, multi_buffer=multi_buffer, wrap_point=30, speed=1.0)
-	audio_player.start()
+	def run(self):
+		for chunk in self.generator:
+			if not self.running:
+				break
+			self.buffer.write(self.buffer_id, {"data": chunk, "timestamp": time.time()})
 
-	# Run for some time
-	try:
-		time.sleep(10)
-		audio_player.set_scale(0.8)  # Reduce volume
-		time.sleep(10)
-	finally:
-		audio_player.stop()
-		audio_player.join()
-		producer_thread.join()
+class MathExprProducer:
+	def __init__(self, math_expr, multi_buffer, samplerate=44100):
+		"""
+		Initialize a producer for MathExpr.
+		"""
+		self.math_expr = math_expr
+		self.multi_buffer = multi_buffer
+		self.samplerate = samplerate
+		self.time_step = 1 / samplerate
+		self.t = 0  # Start time
+		self.running_event = Event()
+		self.thread = None
 
-	print(f"Total audio played (seconds): {audio_player.get_total_played()}")
+	def produce(self):
+		"""
+		Generator function for producing chunks.
+		"""
+		while self.running_event.is_set():
+			# Generate a buffer chunk using MathExpr's __call__
+			chunk = np.array(
+				[self.math_expr(self.t + n * self.time_step) for n in range(self.multi_buffer.buffer_size)],
+				dtype=np.float32,
+			)
+			self.t += self.multi_buffer.buffer_size * self.time_step  # Increment time
 
+			# Yield the chunk for external processing
+			yield chunk
+
+	def threaded_produce(self):
+		"""
+		Run the producer in a thread, writing to MultiBuffer.
+		"""
+		for chunk in self.produce():
+			try:
+				self.multi_buffer.write(chunk)
+			except RuntimeError as e:
+				print(f"Producer blocked: {e}")
+
+	def start(self):
+		"""
+		Start the producer in a new thread.
+		"""
+		if self.thread and self.thread.is_alive():
+			return  # Already running
+		self.running_event.set()
+		self.thread = threading.Thread(target=self.threaded_produce, daemon=True)
+		self.thread.start()
+
+	def stop(self):
+		"""
+		Stop the producer thread.
+		"""
+		self.running_event.clear()
+		if self.thread:
+			self.thread.join()
