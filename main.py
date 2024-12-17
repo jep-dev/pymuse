@@ -29,13 +29,13 @@ from src.tests.test_audio_source import test_audio_source
 def main():
 	master_verbose = True
 	dct = {
+		"audio_source": (test_audio_source,True),
 		#"shape_tree": (test_shape_tree,False),
 		#"types": (test_types,False),
 		##"nodes": (test_nodes,True),
 		#"sound_manager": (test_sound_manager,True),
 		"view": (test_view,True),
 		#"buffer": (test_buffer,True),
-		#"audio_source": (test_audio_source,True),
 	}
 	for k in dct.keys():
 		print(f"Testing {k}...")
